@@ -11,83 +11,158 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BookOpen, Heart, Clock, Trash2, Play } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
+import { collection, query, where, getDocs, doc, updateDoc, arrayRemove } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useToast } from "@/components/ui/use-toast"
 
-// 임시 데이터 (실제로는 Firestore에서 가져와야 함)
-const mockLibraryWorks = [
-  {
-    id: "1",
-    title: "마법사의 여행",
-    type: "novel",
-    genre: "판타지",
-    thumbnailUrl: "/placeholder.svg?height=300&width=200",
-    authorName: "김작가",
-    lastRead: "2024-01-15",
-    progress: 45,
-  },
-  {
-    id: "2",
-    title: "도시의 영웅",
-    type: "comic",
-    genre: "액션",
-    thumbnailUrl: "/placeholder.svg?height=300&width=200",
-    authorName: "박작가",
-    lastRead: "2024-01-14",
-    progress: 80,
-  },
-]
+interface LibraryWork {
+  id: string
+  title: string
+  type: string
+  genre: string
+  thumbnailUrl: string
+  authorName: string
+  addedAt: any
+  progress?: number
+  lastRead?: any
+}
 
-const mockLikedWorks = [
-  {
-    id: "3",
-    title: "로맨스 소설",
-    type: "novel",
-    genre: "로맨스",
-    thumbnailUrl: "/placeholder.svg?height=300&width=200",
-    authorName: "이작가",
-    likedAt: "2024-01-13",
-  },
-]
+interface LikedWork {
+  id: string
+  title: string
+  type: string
+  genre: string
+  thumbnailUrl: string
+  authorName: string
+  likedAt: any
+}
 
-const mockRecentWorks = [
-  {
-    id: "4",
-    title: "SF 어드벤처",
-    type: "comic",
-    genre: "SF",
-    thumbnailUrl: "/placeholder.svg?height=300&width=200",
-    authorName: "최작가",
-    viewedAt: "2024-01-15 14:30",
-    episode: 5,
-  },
-]
+interface RecentWork {
+  id: string
+  title: string
+  type: string
+  genre: string
+  thumbnailUrl: string
+  authorName: string
+  viewedAt: any
+  episode?: number
+  page?: number
+}
 
 export default function LibraryPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const [libraryWorks, setLibraryWorks] = useState(mockLibraryWorks)
-  const [likedWorks, setLikedWorks] = useState(mockLikedWorks)
-  const [recentWorks, setRecentWorks] = useState(mockRecentWorks)
+  const { toast } = useToast()
+  const [libraryWorks, setLibraryWorks] = useState<LibraryWork[]>([])
+  const [likedWorks, setLikedWorks] = useState<LikedWork[]>([])
+  const [recentWorks, setRecentWorks] = useState<RecentWork[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) {
       router.push("/login")
+      return
     }
-  }, [user, router])
 
-  if (!user) {
-    return null
+    const fetchLibraryData = async () => {
+      try {
+        setLoading(true)
+
+        // 사용자의 라이브러리 데이터 가져오기 (실제로는 별도 컬렉션에서 관리)
+        // 여기서는 임시로 좋아요한 작품들을 라이브러리로 사용
+        const worksQuery = query(collection(db, "works"), where("likedBy", "array-contains", user.uid))
+        const worksSnapshot = await getDocs(worksQuery)
+        const works = worksSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          addedAt: doc.data().createdAt,
+          progress: Math.floor(Math.random() * 100), // 임시 진행률
+        })) as LibraryWork[]
+
+        setLibraryWorks(works)
+        setLikedWorks(works.map((work) => ({ ...work, likedAt: work.addedAt })))
+
+        // 최근 본 작품 (임시 데이터)
+        const recentData = works.slice(0, 5).map((work, index) => ({
+          ...work,
+          viewedAt: new Date(Date.now() - index * 24 * 60 * 60 * 1000),
+          episode: work.type === "comic" ? Math.floor(Math.random() * 10) + 1 : undefined,
+          page: work.type === "novel" ? Math.floor(Math.random() * 50) + 1 : undefined,
+        })) as RecentWork[]
+
+        setRecentWorks(recentData)
+      } catch (error) {
+        console.error("Library data fetch error:", error)
+        toast({
+          title: "데이터 로드 실패",
+          description: "라이브러리 데이터를 불러오는 중 오류가 발생했습니다.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchLibraryData()
+  }, [user, router, toast])
+
+  const removeFromLibrary = async (workId: string) => {
+    if (!user) return
+
+    try {
+      // 실제로는 사용자의 라이브러리에서 제거
+      await updateDoc(doc(db, "works", workId), {
+        likedBy: arrayRemove(user.uid),
+      })
+
+      setLibraryWorks((prev) => prev.filter((work) => work.id !== workId))
+      toast({
+        title: "서재에서 제거됨",
+        description: "작품이 내 서재에서 제거되었습니다.",
+      })
+    } catch (error) {
+      console.error("Remove from library error:", error)
+      toast({
+        title: "제거 실패",
+        description: "작품을 서재에서 제거하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const removeFromLibrary = (workId: string) => {
-    setLibraryWorks((prev) => prev.filter((work) => work.id !== workId))
-  }
+  const removeFromLiked = async (workId: string) => {
+    if (!user) return
 
-  const removeFromLiked = (workId: string) => {
-    setLikedWorks((prev) => prev.filter((work) => work.id !== workId))
+    try {
+      await updateDoc(doc(db, "works", workId), {
+        likedBy: arrayRemove(user.uid),
+      })
+
+      setLikedWorks((prev) => prev.filter((work) => work.id !== workId))
+      toast({
+        title: "좋아요 취소됨",
+        description: "작품의 좋아요가 취소되었습니다.",
+      })
+    } catch (error) {
+      console.error("Remove like error:", error)
+      toast({
+        title: "좋아요 취소 실패",
+        description: "좋아요를 취소하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
+    }
   }
 
   const clearHistory = () => {
     setRecentWorks([])
+    toast({
+      title: "기록 삭제됨",
+      description: "시청 기록이 모두 삭제되었습니다.",
+    })
+  }
+
+  if (!user) {
+    return null
   }
 
   return (
@@ -117,7 +192,11 @@ export default function LibraryPage() {
             </TabsList>
 
             <TabsContent value="library" className="space-y-6">
-              {libraryWorks.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-12">
+                  <p>로딩 중...</p>
+                </div>
+              ) : libraryWorks.length === 0 ? (
                 <div className="text-center py-12">
                   <BookOpen className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">서재가 비어있습니다</h3>
@@ -165,15 +244,18 @@ export default function LibraryPage() {
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                               <span>진행률</span>
-                              <span>{work.progress}%</span>
+                              <span>{work.progress || 0}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">
                               <div
                                 className="bg-primary h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${work.progress}%` }}
+                                style={{ width: `${work.progress || 0}%` }}
                               />
                             </div>
-                            <p className="text-xs text-muted-foreground">마지막 읽은 날: {work.lastRead}</p>
+                            <p className="text-xs text-muted-foreground">
+                              추가한 날:{" "}
+                              {work.addedAt?.toDate ? work.addedAt.toDate().toLocaleDateString("ko-KR") : "최근"}
+                            </p>
                           </div>
 
                           <Button className="w-full mt-4" asChild>
@@ -191,7 +273,11 @@ export default function LibraryPage() {
             </TabsContent>
 
             <TabsContent value="liked" className="space-y-6">
-              {likedWorks.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-12">
+                  <p>로딩 중...</p>
+                </div>
+              ) : likedWorks.length === 0 ? (
                 <div className="text-center py-12">
                   <Heart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">좋아요한 작품이 없습니다</h3>
@@ -235,7 +321,10 @@ export default function LibraryPage() {
                           <Badge variant="outline" className="text-xs mb-3">
                             {work.genre}
                           </Badge>
-                          <p className="text-xs text-muted-foreground mb-4">좋아요한 날: {work.likedAt}</p>
+                          <p className="text-xs text-muted-foreground mb-4">
+                            좋아요한 날:{" "}
+                            {work.likedAt?.toDate ? work.likedAt.toDate().toLocaleDateString("ko-KR") : "최근"}
+                          </p>
 
                           <Button className="w-full" asChild>
                             <Link href={`/work/${work.id}`}>
@@ -262,7 +351,11 @@ export default function LibraryPage() {
                 )}
               </div>
 
-              {recentWorks.length === 0 ? (
+              {loading ? (
+                <div className="text-center py-12">
+                  <p>로딩 중...</p>
+                </div>
+              ) : recentWorks.length === 0 ? (
                 <div className="text-center py-12">
                   <Clock className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">최근 본 작품이 없습니다</h3>
@@ -294,7 +387,8 @@ export default function LibraryPage() {
                             <h3 className="font-semibold mb-1">{work.title}</h3>
                             <p className="text-sm text-muted-foreground mb-1">by {work.authorName}</p>
                             <p className="text-xs text-muted-foreground">
-                              {work.viewedAt} • {work.type === "comic" ? `${work.episode}화` : "읽는 중"}
+                              {work.viewedAt?.toLocaleDateString ? work.viewedAt.toLocaleDateString("ko-KR") : "최근"} •{" "}
+                              {work.type === "comic" ? `${work.episode}화` : `${work.page}페이지`}
                             </p>
                           </div>
                           <Button asChild>

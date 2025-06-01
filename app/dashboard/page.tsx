@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { BarChart3, BookOpen, Edit, Eye, Heart, MessageSquare, Plus, Trash2, Upload } from "lucide-react"
+import { BookOpen, Edit, Eye, Heart, MessageSquare, Plus, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
@@ -116,6 +116,88 @@ export default function DashboardPage() {
     return null
   }
 
+  const renderWorkCard = (work: Work) => (
+    <Card key={work.id} className="overflow-hidden">
+      <CardContent className="p-0">
+        <div className="flex flex-col md:flex-row">
+          <div className="w-full md:w-48 h-48 md:h-auto">
+            <img
+              src={work.thumbnailUrl || "/placeholder.svg?height=200&width=150"}
+              alt={work.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant={work.type === "comic" ? "default" : "secondary"}>
+                    {work.type === "comic" ? "만화" : "소설"}
+                  </Badge>
+                  <Badge variant="outline">{work.genre}</Badge>
+                  <Badge
+                    variant={
+                      work.visibility === "public"
+                        ? "default"
+                        : work.visibility === "unlisted"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {work.visibility === "public" ? "공개" : work.visibility === "unlisted" ? "링크 공개" : "비공개"}
+                  </Badge>
+                </div>
+                <h3 className="text-xl font-semibold">{work.title}</h3>
+              </div>
+              <div className="flex items-center gap-4 mt-2 md:mt-0">
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Eye className="h-4 w-4" />
+                  <span>{work.views || 0}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Heart className="h-4 w-4" />
+                  <span>{work.likes || 0}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  {work.type === "comic" ? (
+                    <>
+                      <BookOpen className="h-4 w-4" />
+                      <span>{work.comicContent?.length || 0}화</span>
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-4 w-4" />
+                      <span>{work.novelContent?.length || 0}페이지</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              <Button size="sm" asChild>
+                <Link href={`/work/${work.id}`}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  작품 보기
+                </Link>
+              </Button>
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/upload?edit=${work.id}`}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  수정
+                </Link>
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => handleDeleteWork(work.id)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                삭제
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -171,8 +253,7 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-semibold">내 작품 목록</h2>
             <Button asChild>
               <Link href="/upload">
-                <Plus className="mr-2 h-4 w-4" />
-                새 작품 업로드
+                <Plus className="mr-2 h-4 w-4" />새 작품 업로드
               </Link>
             </Button>
           </div>
@@ -204,103 +285,7 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
-                  {works.map((work) => (
-                    <Card key={work.id} className="overflow-hidden">
-                      <CardContent className="p-0">
-                        <div className="flex flex-col md:flex-row">
-                          <div className="w-full md:w-48 h-48 md:h-auto">
-                            <img
-                              src={work.thumbnailUrl || "/placeholder.svg?height=200&width=150"}
-                              alt={work.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="flex-1 p-6">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-                              <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant={work.type === "comic" ? "default" : "secondary"}>
-                                    {work.type === "comic" ? "만화" : "소설"}
-                                  </Badge>
-                                  <Badge variant="outline">{work.genre}</Badge>
-                                  <Badge
-                                    variant={
-                                      work.visibility === "public"
-                                        ? "default"
-                                        : work.visibility === "unlisted"
-                                        ? "secondary"
-                                        : "outline"
-                                    }
-                                  >
-                                    {work.visibility === "public"
-                                      ? "공개"
-                                      : work.visibility === "unlisted"
-                                      ? "링크 공개"
-                                      : "비공개"}
-                                  </Badge>
-                                </div>
-                                <h3 className="text-xl font-semibold">{work.title}</h3>
-                              </div>
-                              <div className="flex items-center gap-4 mt-2 md:mt-0">
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <Eye className="h-4 w-4" />
-                                  <span>{work.views || 0}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <Heart className="h-4 w-4" />
-                                  <span>{work.likes || 0}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  {work.type === "comic" ? (
-                                    <>
-                                      <BookOpen className="h-4 w-4" />
-                                      <span>{work.comicContent?.length || 0}화</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <BookOpen className="h-4 w-4" />
-                                      <span>{work.novelContent?.length || 0}페이지</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 mt-4">
-                              <Button size="sm" asChild>
-                                <Link href={`/work/${work.id}`}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  작품 보기
-                                </Link>
-                              </Button>
-                              <Button size="sm" variant="outline" asChild>
-                                <Link href={`/dashboard/edit/${work.id}`}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  수정
-                                </Link>
-                              </Button>
-                              <Button size="sm" variant="outline" asChild>
-                                <Link href={`/dashboard/stats/${work.id}`}>
-                                  <BarChart3 className="mr-2 h-4 w-4" />
-                                  통계
-                                </Link>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteWork(work.id)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                삭제
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <div className="space-y-4">{works.map(renderWorkCard)}</div>
               )}
             </TabsContent>
 
@@ -324,94 +309,7 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
-                  {works
-                    .filter((work) => work.type === "comic")
-                    .map((work) => (
-                      <Card key={work.id} className="overflow-hidden">
-                        <CardContent className="p-0">
-                          <div className="flex flex-col md:flex-row">
-                            <div className="w-full md:w-48 h-48 md:h-auto">
-                              <img
-                                src={work.thumbnailUrl || "/placeholder.svg?height=200&width=150"}
-                                alt={work.title}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="flex-1 p-6">
-                              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Badge variant="default">만화</Badge>
-                                    <Badge variant="outline">{work.genre}</Badge>
-                                    <Badge
-                                      variant={
-                                        work.visibility === "public"
-                                          ? "default"
-                                          : work.visibility === "unlisted"
-                                          ? "secondary"
-                                          : "outline"
-                                      }
-                                    >
-                                      {work.visibility === "public"
-                                        ? "공개"
-                                        : work.visibility === "unlisted"
-                                        ? "링크 공개"
-                                        : "비공개"}
-                                    </Badge>
-                                  </div>
-                                  <h3 className="text-xl font-semibold">{work.title}</h3>
-                                </div>
-                                <div className="flex items-center gap-4 mt-2 md:mt-0">
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Eye className="h-4 w-4" />
-                                    <span>{work.views || 0}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Heart className="h-4 w-4" />
-                                    <span>{work.likes || 0}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <BookOpen className="h-4 w-4" />
-                                    <span>{work.comicContent?.length || 0}화</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-wrap gap-2 mt-4">
-                                <Button size="sm" asChild>
-                                  <Link href={`/work/${work.id}`}>
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    작품 보기
-                                  </Link>
-                                </Button>
-                                <Button size="sm" variant="outline" asChild>
-                                  <Link href={`/dashboard/edit/${work.id}`}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    수정
-                                  </Link>
-                                </Button>
-                                <Button size="sm" variant="outline" asChild>
-                                  <Link href={`/dashboard/stats/${work.id}`}>
-                                    <BarChart3 className="mr-2 h-4 w-4" />
-                                    통계
-                                  </Link>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleDeleteWork(work.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  삭제
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                </div>
+                <div className="space-y-4">{works.filter((work) => work.type === "comic").map(renderWorkCard)}</div>
               )}
             </TabsContent>
 
@@ -435,47 +333,12 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
-                  {works
-                    .filter((work) => work.type === "novel")
-                    .map((work) => (
-                      <Card key={work.id} className="overflow-hidden">
-                        <CardContent className="p-0">
-                          <div className="flex flex-col md:flex-row">
-                            <div className="w-full md:w-48 h-48 md:h-auto">
-                              <img
-                                src={work.thumbnailUrl || "/placeholder.svg?height=200&width=150"}
-                                alt={work.title}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="flex-1 p-6">
-                              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Badge variant="secondary">소설</Badge>
-                                    <Badge variant="outline">{work.genre}</Badge>
-                                    <Badge
-                                      variant={
-                                        work.visibility === "public"
-                                          ? "default"
-                                          : work.visibility === "unlisted"
-                                          ? "secondary"
-                                          : "outline"
-                                      }
-                                    >
-                                      {work.visibility === "public"
-                                        ? "공개"
-                                        : work.visibility === "unlisted"
-                                        ? "링크 공개"
-                                        : "비공개"}
-                                    </Badge>
-                                  </div>
-                                  <h3 className="text-xl font-semibold">{work.title}</h3>
-                                </div>
-                                <div className="flex items-center gap-4 mt-2 md:mt-0">
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Eye className="h-4 w-4" />
-                                    <span>{work.views || 0}</span>
-                                  </div>
-                                  \
+                <div className="space-y-4">{works.filter((work) => work.type === "novel").map(renderWorkCard)}</div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+    </div>
+  )
+}
